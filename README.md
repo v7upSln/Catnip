@@ -1,6 +1,6 @@
 # Catnip
 
-Catnip is a specialized PaperMC plugin designed to enhance feline behavior and introduce a comprehensive bonding system between players and their tamed cats.
+Catnip is a specialized PaperMC plugin designed to enhance cats behavior and introduce a comprehensive bonding system between players and their tamed cats.
 
 ## Features
 
