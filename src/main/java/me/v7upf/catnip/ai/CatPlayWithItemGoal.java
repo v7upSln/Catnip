@@ -9,6 +9,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Item;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
@@ -17,6 +18,7 @@ import java.util.EnumSet;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class CatPlayWithItemGoal implements Goal<Cat> {
+    private static final String GOAL_ID = "play_item";
     private final GoalKey<Cat> key;
     private final Main plugin;
     private final Cat cat;
@@ -33,30 +35,36 @@ public class CatPlayWithItemGoal implements Goal<Cat> {
 
     @Override
     public boolean shouldActivate() {
-        if (cat.isSitting())
-            return false;
-        if (ThreadLocalRandom.current().nextDouble() >= 0.15)
-            return false;
-        boolean activate = findItem();
-        return activate;
+        if (cat.isSitting()) return false;
+        if (ThreadLocalRandom.current().nextDouble() >= 0.15) return false;
+        if (!findItem()) return false;
+
+        // Check if another goal is already active
+        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
+        String active = cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING);
+        return active == null;
     }
 
     @Override
     public boolean shouldStayActive() {
-        if (cat.isSitting())
-            return false;
+        if (cat.isSitting()) return false;
         return findItem();
     }
 
     @Override
     public void start() {
         ticksPlayed = 0;
+        cat.getPersistentDataContainer().set(new NamespacedKey(plugin, "active_goal"), PersistentDataType.STRING, GOAL_ID);
     }
 
     @Override
     public void stop() {
         cat.getPathfinder().stopPathfinding();
         cat.setTarget(null);
+        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
+        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING))) {
+            cat.getPersistentDataContainer().remove(activeKey);
+        }
     }
 
     @Override
@@ -96,13 +104,11 @@ public class CatPlayWithItemGoal implements Goal<Cat> {
     private Item getNearbyTargetItem() {
         Collection<Item> items = cat.getWorld().getNearbyEntitiesByType(Item.class, cat.getLocation(), 10, 5, 10,
                 item -> item.getItemStack().getType() == targetType);
-        if (items.size() == 0)
-            return null;
-        int rand = randomInt(0, items.size());
+        if (items.size() == 0) return null;
+        int rand = randomInt(0, items.size() - 1);
         int i = 0;
         for (Item item : items) {
-            if (i == rand)
-                return item;
+            if (i == rand) return item;
             i++;
         }
         return null;
@@ -112,8 +118,7 @@ public class CatPlayWithItemGoal implements Goal<Cat> {
         if (targetItem == null || !targetItem.isValid()) {
             targetItem = getNearbyTargetItem();
             return targetItem != null;
-        } else
-            return true;
+        } else return true;
     }
 
     private int randomInt(int min, int max) {

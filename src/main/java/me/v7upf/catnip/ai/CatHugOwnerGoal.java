@@ -9,11 +9,13 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Player;
+import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.EnumSet;
 
 public class CatHugOwnerGoal implements Goal<Cat> {
+    private static final String GOAL_ID = "hug_owner";
     private final GoalKey<Cat> key;
     private final Main plugin;
     private final Cat cat;
@@ -32,32 +34,28 @@ public class CatHugOwnerGoal implements Goal<Cat> {
 
     @Override
     public boolean shouldActivate() {
-        if (cat.isSitting())
-            return false;
-        if (!cat.isTamed())
-            return false;
-        if (!(cat.getOwner() instanceof Player))
-            return false;
+        if (cat.isSitting()) return false;
+        if (!cat.isTamed()) return false;
+        if (!(cat.getOwner() instanceof Player)) return false;
         Player owner = (Player) cat.getOwner();
         if (!cat.getWorld().equals(owner.getWorld()) || cat.getLocation().distanceSquared(owner.getLocation()) > 25)
             return false;
-        if (cat.getTicksLived() < nextActivationTick)
-            return false;
+        if (cat.getTicksLived() < nextActivationTick) return false;
         int bond = plugin.getBondLevels().getOrDefault(cat.getUniqueId(), 0);
-        if (bond < REQUIRED_BOND)
-            return false;
-        boolean activate = Math.random() < ACTIVATION_CHANCE;
-        return activate;
+        if (bond < REQUIRED_BOND) return false;
+        if (Math.random() >= ACTIVATION_CHANCE) return false;
+
+        // Check if another goal is already active
+        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
+        String active = cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING);
+        return active == null; // only activate if no goal is active
     }
 
     @Override
     public boolean shouldStayActive() {
-        if (cat.isSitting())
-            return false;
-        if (!cat.isTamed())
-            return false;
-        if (!(cat.getOwner() instanceof Player))
-            return false;
+        if (cat.isSitting()) return false;
+        if (!cat.isTamed()) return false;
+        if (!(cat.getOwner() instanceof Player)) return false;
         Player owner = (Player) cat.getOwner();
         return cat.getWorld().equals(owner.getWorld()) && cat.getLocation().distanceSquared(owner.getLocation()) <= 49;
     }
@@ -66,6 +64,8 @@ public class CatHugOwnerGoal implements Goal<Cat> {
     public void start() {
         owner = cat.getOwner() instanceof Player ? (Player) cat.getOwner() : null;
         cooldown = 0;
+        // Set this goal as the active one
+        cat.getPersistentDataContainer().set(new NamespacedKey(plugin, "active_goal"), PersistentDataType.STRING, GOAL_ID);
     }
 
     @Override
@@ -73,12 +73,16 @@ public class CatHugOwnerGoal implements Goal<Cat> {
         cat.getPathfinder().stopPathfinding();
         nextActivationTick = cat.getTicksLived() + COOLDOWN_HUG;
         owner = null;
+        // Clear active goal if it's still this one
+        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
+        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING))) {
+            cat.getPersistentDataContainer().remove(activeKey);
+        }
     }
 
     @Override
     public void tick() {
-        if (owner == null)
-            return;
+        if (owner == null) return;
         cat.getPathfinder().moveTo(owner.getLocation(), 1.1);
         if (cat.getLocation().distanceSquared(owner.getLocation()) < 4 && cooldown <= 0) {
             cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_PURR, 0.4f, 1.5f);

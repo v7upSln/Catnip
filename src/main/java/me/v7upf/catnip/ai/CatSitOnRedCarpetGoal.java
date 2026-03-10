@@ -10,11 +10,13 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Cat;
+import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.EnumSet;
 
 public class CatSitOnRedCarpetGoal implements Goal<Cat> {
+    private static final String GOAL_ID = "sit_carpet";
     private final GoalKey<Cat> key;
     private final Cat cat;
     private Location targetCarpet;
@@ -30,7 +32,7 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
     @Override
     public boolean shouldActivate() {
         if (cat.isLyingDown() && targetCarpet == null) return false;
-        
+
         if (cat.getOwner() instanceof org.bukkit.entity.Player) {
             org.bukkit.entity.Player owner = (org.bukkit.entity.Player) cat.getOwner();
             if (!cat.getWorld().equals(owner.getWorld()) ||
@@ -38,7 +40,7 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
                 return false;
             }
         }
-        
+
         if (searchCooldown > 0) {
             searchCooldown--;
             return false;
@@ -54,7 +56,11 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
             searchCooldown = 120;
             return false;
         }
-        return true;
+
+        // Check if another goal is already active
+        NamespacedKey activeKey = new NamespacedKey(cat.getServer().getPluginManager().getPlugin("Catnip"), "active_goal");
+        String active = cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING);
+        return active == null;
     }
 
     @Override
@@ -62,7 +68,7 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
         if (targetCarpet == null) return false;
         if (targetCarpet.getBlock().getType() != Material.RED_CARPET) return false;
         if (cat.isLeashed()) return false;
-        
+
         if (cat.getOwner() instanceof org.bukkit.entity.Player) {
             org.bukkit.entity.Player owner = (org.bukkit.entity.Player) cat.getOwner();
             if (!cat.getWorld().equals(owner.getWorld()) ||
@@ -76,36 +82,41 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
     @Override
     public void start() {
         cat.getPathfinder().moveTo(targetCarpet.clone().add(0.5, 0, 0.5), 1.0);
+        NamespacedKey activeKey = new NamespacedKey(cat.getServer().getPluginManager().getPlugin("Catnip"), "active_goal");
+        cat.getPersistentDataContainer().set(activeKey, PersistentDataType.STRING, GOAL_ID);
     }
 
     @Override
     public void stop() {
         targetCarpet = null;
-        cat.setLyingDown(false); // Fixed method name
+        cat.setLyingDown(false);
+        NamespacedKey activeKey = new NamespacedKey(cat.getServer().getPluginManager().getPlugin("Catnip"), "active_goal");
+        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING))) {
+            cat.getPersistentDataContainer().remove(activeKey);
+        }
     }
 
     @Override
     public void tick() {
         if (targetCarpet == null) return;
-        
+
         Location catLoc = cat.getLocation();
         if (Math.abs(catLoc.getX() - (targetCarpet.getX() + 0.5)) < 0.5 &&
             Math.abs(catLoc.getZ() - (targetCarpet.getZ() + 0.5)) < 0.5) {
-            
-            if (!cat.isLyingDown()) { // Fixed method name
-                cat.setLyingDown(true); // Fixed method name
+
+            if (!cat.isLyingDown()) {
+                cat.setLyingDown(true);
             }
 
             // Purring every 5 ticks as per Wiki, but with very low volume
             purrTick++;
             if (purrTick >= 5) {
-                // Volume lowered to 0.15f
                 cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_PURR, 0.15f, 1.0f);
                 purrTick = 0;
             }
 
         } else {
-            if (cat.isLyingDown()) cat.setLyingDown(false); // Fixed method names
+            if (cat.isLyingDown()) cat.setLyingDown(false);
             cat.getPathfinder().moveTo(targetCarpet.clone().add(0.5, 0, 0.5), 1.0);
         }
     }

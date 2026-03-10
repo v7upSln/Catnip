@@ -9,18 +9,19 @@ import org.bukkit.Particle;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Player;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.EnumSet;
 
 public class CatPlayFightOwnerGoal implements Goal<Cat> {
+    private static final String GOAL_ID = "play_fight";
     private final GoalKey<Cat> key;
     private final Main plugin;
     private final Cat cat;
     private Player owner;
     private int cooldown = 0;
-    private int globalCooldown = 0;
     private int nextActivationTick = 0;
     private static final int COOLDOWN_FIGHT = 20 * 60 * 10;
     private static final double ACTIVATION_CHANCE = 0.09;
@@ -35,19 +36,22 @@ public class CatPlayFightOwnerGoal implements Goal<Cat> {
     @Override
     public boolean shouldActivate() {
         if (cat.isSitting() || !cat.isTamed() || !(cat.getOwner() instanceof Player)) return false;
-        
+
         Player checkOwner = (Player) cat.getOwner();
         if (!cat.getWorld().equals(checkOwner.getWorld()) || cat.getLocation().distanceSquared(checkOwner.getLocation()) > 36)
             return false;
-            
-        if (globalCooldown > 0 || cat.getTicksLived() < nextActivationTick)
-            return false;
-            
+
+        if (nextActivationTick > 0 && cat.getTicksLived() < nextActivationTick) return false;
+
         int bond = plugin.getBondLevels().getOrDefault(cat.getUniqueId(), 0);
-        if (bond > MAX_BOND) // Only play fight if the bond is low
-            return false;
-            
-        return Math.random() < ACTIVATION_CHANCE;
+        if (bond > MAX_BOND) return false;
+
+        if (Math.random() >= ACTIVATION_CHANCE) return false;
+
+        // Check if another goal is already active
+        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
+        String active = cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING);
+        return active == null;
     }
 
     @Override
@@ -61,6 +65,7 @@ public class CatPlayFightOwnerGoal implements Goal<Cat> {
     public void start() {
         owner = cat.getOwner() instanceof Player ? (Player) cat.getOwner() : null;
         cooldown = 0;
+        cat.getPersistentDataContainer().set(new NamespacedKey(plugin, "active_goal"), PersistentDataType.STRING, GOAL_ID);
     }
 
     @Override
@@ -68,15 +73,18 @@ public class CatPlayFightOwnerGoal implements Goal<Cat> {
         cat.getPathfinder().stopPathfinding();
         nextActivationTick = cat.getTicksLived() + COOLDOWN_FIGHT;
         owner = null;
+        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
+        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING))) {
+            cat.getPersistentDataContainer().remove(activeKey);
+        }
     }
 
     @Override
     public void tick() {
-        if (globalCooldown > 0) globalCooldown--;
         if (owner == null) return;
-        
+
         cat.getPathfinder().moveTo(owner.getLocation(), 1.15);
-        
+
         if (cat.getLocation().distanceSquared(owner.getLocation()) < 4 && cooldown <= 0) {
             owner.damage(1.0, cat);
             cat.setVelocity(new Vector(0, 0.5, 0));

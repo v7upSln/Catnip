@@ -9,6 +9,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Item;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.util.Vector;
 import org.jetbrains.annotations.NotNull;
 
@@ -17,6 +18,7 @@ import java.util.EnumSet;
 import java.util.concurrent.ThreadLocalRandom;
 
 public class CatPlayWithStringGoal implements Goal<Cat> {
+    private static final String GOAL_ID = "play_string";
     private final GoalKey<Cat> key;
     private final Main plugin;
     private final Cat cat;
@@ -32,18 +34,18 @@ public class CatPlayWithStringGoal implements Goal<Cat> {
 
     @Override
     public boolean shouldActivate() {
-        if (cat.isSitting())
-            return false;
-        if (ThreadLocalRandom.current().nextDouble() >= 0.15)
-            return false;
-        boolean activate = findString();
-        return activate;
+        if (cat.isSitting()) return false;
+        if (ThreadLocalRandom.current().nextDouble() >= 0.15) return false;
+        if (!findString()) return false;
+
+        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
+        String active = cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING);
+        return active == null;
     }
 
     @Override
     public boolean shouldStayActive() {
-        if (cat.isSitting())
-            return false;
+        if (cat.isSitting()) return false;
         return findString();
     }
 
@@ -51,18 +53,22 @@ public class CatPlayWithStringGoal implements Goal<Cat> {
     public void start() {
         ticksPlayed = 0;
         jumpCooldown = 0;
+        cat.getPersistentDataContainer().set(new NamespacedKey(plugin, "active_goal"), PersistentDataType.STRING, GOAL_ID);
     }
 
     @Override
     public void stop() {
         cat.getPathfinder().stopPathfinding();
         targetString = null;
+        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
+        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING))) {
+            cat.getPersistentDataContainer().remove(activeKey);
+        }
     }
 
     @Override
     public void tick() {
-        if (!findString())
-            return;
+        if (!findString()) return;
         cat.getPathfinder().moveTo(targetString.getLocation(), 1.2);
         if (targetString.getLocation().distanceSquared(cat.getLocation()) < 1) {
             targetString.setVelocity(new Vector(randomDouble(-0.25, 0.25), randomDouble(-0.25, 0.25), randomDouble(-0.25, 0.25)));
@@ -93,13 +99,11 @@ public class CatPlayWithStringGoal implements Goal<Cat> {
     private Item getNearbyString() {
         Collection<Item> items = cat.getWorld().getNearbyEntitiesByType(Item.class, cat.getLocation(), 10, 5, 10,
                 item -> item.getItemStack().getType() == Material.STRING);
-        if (items.isEmpty())
-            return null;
+        if (items.isEmpty()) return null;
         int rand = randomInt(0, items.size() - 1);
         int i = 0;
         for (Item item : items) {
-            if (i == rand)
-                return item;
+            if (i == rand) return item;
             i++;
         }
         return null;
