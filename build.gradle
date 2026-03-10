@@ -1,0 +1,46 @@
+plugins {
+    id 'java'
+    id "xyz.jpenilla.run-paper" version "2.3.0"
+    id "com.gradleup.shadow" version "9.3.1"
+}
+
+group 'me.v7upf.catnip'
+version '1.0'
+
+java {
+    toolchain.languageVersion.set(JavaLanguageVersion.of(21))
+}
+
+repositories {
+    mavenCentral()
+    maven {
+        name = "papermc-repo"
+        url = "https://repo.papermc.io/repository/maven-public/"
+    }
+}
+
+dependencies {
+    compileOnly 'io.papermc.paper:paper-api:1.21.1-R0.1-SNAPSHOT'
+    implementation 'org.bstats:bstats-bukkit:3.2.1'
+}
+
+tasks {
+    runServer {
+        minecraftVersion "1.21.1"
+    }
+    build {
+        dependsOn jar
+    }
+}
+
+shadowJar {
+    configurations = [project.configurations.runtimeClasspath]
+    dependencies {
+        exclude { it.moduleGroup != 'org.bstats' }
+    }
+    relocate 'org.bstats', 'me.v7upf.catnip.bstats'
+    archiveFileName = "catnip${project.version}.jar"
+}
+
+jar.enabled = false
+build.dependsOn shadowJar

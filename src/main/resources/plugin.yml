@@ -1,0 +1,16 @@
+name: Catnip
+main: me.v7upf.catnip.Main
+version: 1.0
+api-version: '1.21'
+commands:
+  catbond:
+    description: Check bonding level of cats
+    usage: /catbond [player]
+    permission: catnip.bond
+permissions:
+  catnip.bond:
+    description: Allows checking your own cat bond
+    default: true
+  catnip.admin:
+    description: Allows checking other players' cats
+    default: op
