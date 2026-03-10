@@ -19,6 +19,17 @@ public class CatBondCommand implements CommandExecutor {
 
     @Override
     public boolean onCommand(@NotNull CommandSender sender, @NotNull Command command, @NotNull String label, @NotNull String[] args) {
+        if (sender.hasPermission("catnip.admin")) {
+            Bukkit.getScheduler().runTaskAsynchronously(plugin, () -> {
+                UpdateChecker.check(plugin, "v7upSln/Catnip");
+                if (UpdateChecker.updateAvailable) {
+                    Bukkit.getScheduler().runTask(plugin, () -> {
+                        sender.sendMessage("§6[Catnip] §eAn update is available! Version: §a" + UpdateChecker.latestVersion);
+                        sender.sendMessage("§6Download: §ehttps://github.com/v7upSln/Catnip/releases/latest");
+                    });
+                }
+            });
+        }
         OfflinePlayer target;
         if (args.length == 0) {
             if (!(sender instanceof Player)) {

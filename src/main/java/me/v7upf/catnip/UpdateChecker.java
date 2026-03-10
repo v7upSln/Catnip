@@ -14,6 +14,8 @@ public class UpdateChecker {
     public static String latestVersion = "";
 
     public static void check(JavaPlugin plugin, String repo) {
+        updateAvailable = false;
+        latestVersion = "";
         String current = plugin.getDescription().getVersion();
         try {
             String latest = fetchLatestRelease(repo);
@@ -28,14 +30,10 @@ public class UpdateChecker {
                     updateAvailable = true;
                     latestVersion = latest;
                     plugin.getLogger().info("Update available: " + latest + " (current " + current + ") https://github.com/" + repo + "/releases/latest");
-                } else {
-                    plugin.getLogger().info("Running latest version " + current);
                 }
-            } else {
-                plugin.getLogger().warning("Could not determine latest version");
             }
         } catch (Exception e) {
-            plugin.getLogger().warning("Update check failed: " + e.getMessage());
+            // Silent on errors
         }
     }
 
