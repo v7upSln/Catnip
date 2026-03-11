@@ -14,6 +14,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.EnumSet;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class CatSitOnRedCarpetGoal implements Goal<Cat> {
     private static final String GOAL_ID = "sit_carpet";
@@ -22,6 +23,7 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
     private Location targetCarpet;
     private int searchCooldown = 0;
     private int purrTick = 0;
+    private int nextPurrDelay = 0; // ticks until next purr
     private static final double ACTIVATION_CHANCE = 0.29;
 
     public CatSitOnRedCarpetGoal(Main plugin, Cat cat) {
@@ -57,9 +59,7 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
             return false;
         }
 
-        // Check if another goal is already active
-        NamespacedKey activeKey = new NamespacedKey(cat.getServer().getPluginManager().getPlugin("Catnip"), "active_goal");
-        String active = cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING);
+        String active = cat.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING);
         return active == null;
     }
 
@@ -82,17 +82,17 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
     @Override
     public void start() {
         cat.getPathfinder().moveTo(targetCarpet.clone().add(0.5, 0, 0.5), 1.0);
-        NamespacedKey activeKey = new NamespacedKey(cat.getServer().getPluginManager().getPlugin("Catnip"), "active_goal");
-        cat.getPersistentDataContainer().set(activeKey, PersistentDataType.STRING, GOAL_ID);
+        cat.getPersistentDataContainer().set(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING, GOAL_ID);
+        purrTick = 0;
+        nextPurrDelay = randomPurrDelay();
     }
 
     @Override
     public void stop() {
         targetCarpet = null;
         cat.setLyingDown(false);
-        NamespacedKey activeKey = new NamespacedKey(cat.getServer().getPluginManager().getPlugin("Catnip"), "active_goal");
-        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING))) {
-            cat.getPersistentDataContainer().remove(activeKey);
+        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING))) {
+            cat.getPersistentDataContainer().remove(Main.ACTIVE_GOAL_KEY);
         }
     }
 
@@ -108,17 +108,23 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
                 cat.setLyingDown(true);
             }
 
-            // Purring every 5 ticks as per Wiki, but with very low volume
+            // Purr at random intervals (approx every 15-25 ticks) with low volume and slight pitch variation
             purrTick++;
-            if (purrTick >= 5) {
-                cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_PURR, 0.15f, 1.0f);
+            if (purrTick >= nextPurrDelay) {
+                float pitch = 0.9f + (float) Math.random() * 0.2f; // 0.9 to 1.1
+                cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_PURR, 0.1f, pitch);
                 purrTick = 0;
+                nextPurrDelay = randomPurrDelay();
             }
 
         } else {
             if (cat.isLyingDown()) cat.setLyingDown(false);
             cat.getPathfinder().moveTo(targetCarpet.clone().add(0.5, 0, 0.5), 1.0);
         }
+    }
+
+    private int randomPurrDelay() {
+        return ThreadLocalRandom.current().nextInt(15, 26); // 15-25 ticks
     }
 
     private Location findRedCarpet() {

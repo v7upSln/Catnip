@@ -38,8 +38,7 @@ public class CatPlayWithStringGoal implements Goal<Cat> {
         if (ThreadLocalRandom.current().nextDouble() >= 0.15) return false;
         if (!findString()) return false;
 
-        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
-        String active = cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING);
+        String active = cat.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING);
         return active == null;
     }
 
@@ -53,16 +52,15 @@ public class CatPlayWithStringGoal implements Goal<Cat> {
     public void start() {
         ticksPlayed = 0;
         jumpCooldown = 0;
-        cat.getPersistentDataContainer().set(new NamespacedKey(plugin, "active_goal"), PersistentDataType.STRING, GOAL_ID);
+        cat.getPersistentDataContainer().set(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING, GOAL_ID);
     }
 
     @Override
     public void stop() {
         cat.getPathfinder().stopPathfinding();
         targetString = null;
-        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
-        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING))) {
-            cat.getPersistentDataContainer().remove(activeKey);
+        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING))) {
+            cat.getPersistentDataContainer().remove(Main.ACTIVE_GOAL_KEY);
         }
     }
 

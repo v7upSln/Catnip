@@ -13,6 +13,7 @@ import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.EnumSet;
+import java.util.concurrent.ThreadLocalRandom;
 
 public class CatSitOnFurnaceGoal implements Goal<Cat> {
     private static final String GOAL_ID = "sit_furnace";
@@ -43,13 +44,11 @@ public class CatSitOnFurnaceGoal implements Goal<Cat> {
         }
         targetFurnace = findFurnace();
         if (targetFurnace == null) {
-            searchCooldown = 120;
+            searchCooldown = 80 + ThreadLocalRandom.current().nextInt(60);
             return false;
         }
 
-        // Check if another goal is already active
-        NamespacedKey activeKey = new NamespacedKey(cat.getServer().getPluginManager().getPlugin("Catnip"), "active_goal");
-        String active = cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING);
+        String active = cat.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING);
         return active == null;
     }
 
@@ -72,17 +71,15 @@ public class CatSitOnFurnaceGoal implements Goal<Cat> {
     @Override
     public void start() {
         cat.getPathfinder().moveTo(targetFurnace.clone().add(0.5, 1, 0.5), 1.0);
-        NamespacedKey activeKey = new NamespacedKey(cat.getServer().getPluginManager().getPlugin("Catnip"), "active_goal");
-        cat.getPersistentDataContainer().set(activeKey, PersistentDataType.STRING, GOAL_ID);
+        cat.getPersistentDataContainer().set(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING, GOAL_ID);
     }
 
     @Override
     public void stop() {
         targetFurnace = null;
         cat.setSitting(false);
-        NamespacedKey activeKey = new NamespacedKey(cat.getServer().getPluginManager().getPlugin("Catnip"), "active_goal");
-        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING))) {
-            cat.getPersistentDataContainer().remove(activeKey);
+        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING))) {
+            cat.getPersistentDataContainer().remove(Main.ACTIVE_GOAL_KEY);
         }
     }
 
@@ -91,10 +88,9 @@ public class CatSitOnFurnaceGoal implements Goal<Cat> {
         if (targetFurnace == null) return;
 
         Location catLoc = cat.getLocation();
-        // If the cat is at the coordinates and above the block
         if (Math.abs(catLoc.getX() - (targetFurnace.getX() + 0.5)) < 0.6 &&
             Math.abs(catLoc.getZ() - (targetFurnace.getZ() + 0.5)) < 0.6 &&
-            catLoc.getY() >= targetFurnace.getY()) {
+            Math.abs(catLoc.getY() - (targetFurnace.getY() + 1)) < 0.5) {
 
             if (!cat.isSitting()) {
                 cat.setSitting(true);
@@ -107,7 +103,7 @@ public class CatSitOnFurnaceGoal implements Goal<Cat> {
 
     private Location findFurnace() {
         Location center = cat.getLocation();
-        int radius = 6;
+        int radius = 5;
         for (int x = -radius; x <= radius; x++) {
             for (int y = -2; y <= 2; y++) {
                 for (int z = -radius; z <= radius; z++) {
@@ -132,6 +128,6 @@ public class CatSitOnFurnaceGoal implements Goal<Cat> {
 
     @Override
     public @NotNull EnumSet<GoalType> getTypes() {
-        return EnumSet.of(GoalType.MOVE, GoalType.JUMP);
+        return EnumSet.of(GoalType.MOVE, GoalType.JUMP, GoalType.LOOK);
     }
 }

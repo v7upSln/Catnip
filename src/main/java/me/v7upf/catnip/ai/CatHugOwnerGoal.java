@@ -45,10 +45,8 @@ public class CatHugOwnerGoal implements Goal<Cat> {
         if (bond < REQUIRED_BOND) return false;
         if (Math.random() >= ACTIVATION_CHANCE) return false;
 
-        // Check if another goal is already active
-        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
-        String active = cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING);
-        return active == null; // only activate if no goal is active
+        String active = cat.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING);
+        return active == null;
     }
 
     @Override
@@ -64,8 +62,7 @@ public class CatHugOwnerGoal implements Goal<Cat> {
     public void start() {
         owner = cat.getOwner() instanceof Player ? (Player) cat.getOwner() : null;
         cooldown = 0;
-        // Set this goal as the active one
-        cat.getPersistentDataContainer().set(new NamespacedKey(plugin, "active_goal"), PersistentDataType.STRING, GOAL_ID);
+        cat.getPersistentDataContainer().set(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING, GOAL_ID);
     }
 
     @Override
@@ -73,10 +70,8 @@ public class CatHugOwnerGoal implements Goal<Cat> {
         cat.getPathfinder().stopPathfinding();
         nextActivationTick = cat.getTicksLived() + COOLDOWN_HUG;
         owner = null;
-        // Clear active goal if it's still this one
-        NamespacedKey activeKey = new NamespacedKey(plugin, "active_goal");
-        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(activeKey, PersistentDataType.STRING))) {
-            cat.getPersistentDataContainer().remove(activeKey);
+        if (GOAL_ID.equals(cat.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING))) {
+            cat.getPersistentDataContainer().remove(Main.ACTIVE_GOAL_KEY);
         }
     }
 

@@ -25,7 +25,6 @@ public class CatBondCommand implements CommandExecutor {
                 if (UpdateChecker.updateAvailable) {
                     Bukkit.getScheduler().runTask(plugin, () -> {
                         sender.sendMessage("§6[Catnip] §eAn update is available! Version: §a" + UpdateChecker.latestVersion);
-                        sender.sendMessage("§6Download: §ehttps://github.com/v7upSln/Catnip/releases/latest");
                     });
                 }
             });

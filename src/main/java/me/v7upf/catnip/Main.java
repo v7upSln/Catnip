@@ -5,6 +5,7 @@ import me.v7upf.catnip.ai.*;
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Material;
+import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.entity.Cat;
 import org.bukkit.entity.Entity;
@@ -22,6 +23,7 @@ import org.bukkit.event.player.PlayerJoinEvent;
 import org.bukkit.inventory.EquipmentSlot;
 import org.bukkit.inventory.Inventory;
 import org.bukkit.inventory.ItemStack;
+import org.bukkit.persistence.PersistentDataType;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.configuration.file.YamlConfiguration;
@@ -36,10 +38,14 @@ import java.util.Map;
 import java.util.UUID;
 
 public class Main extends JavaPlugin implements Listener {
+    public static final NamespacedKey ACTIVE_GOAL_KEY = new NamespacedKey("catnip", "active_goal");
+
     public final HashMap<UUID, Integer> purrTimes = new HashMap<>();
+    private final HashMap<UUID, Long> lastPurrStart = new HashMap<>();
     private final HashMap<UUID, Integer> bondLevels = new HashMap<>();
-    private final HashMap<UUID, Long> lastFedTicks = new HashMap<>(); // tick when last fed
+    private final HashMap<UUID, Long> lastFedTicks = new HashMap<>();
     private File bondFile;
+    private static final long PURR_COOLDOWN_TICKS = 1200L;
 
     @Override
     public void onEnable() {
@@ -74,14 +80,16 @@ public class Main extends JavaPlugin implements Listener {
     public void onPlayerJoin(PlayerJoinEvent e) {
         if (e.getPlayer().hasPermission("catnip.admin") && UpdateChecker.updateAvailable) {
             e.getPlayer().sendMessage("§6[Catnip] §eAn update is available! Version: §a" + UpdateChecker.latestVersion);
-            e.getPlayer().sendMessage("§6Download: §ehttps://github.com/v7upSln/Catnip/releases/latest");
         }
     }
 
     @EventHandler
     public void onEntityAdd(EntityAddToWorldEvent e) {
         if (e.getEntity() instanceof Cat cat) {
-            // Apply decay when cat loads (in case it was offline for a long time)
+            if (cat.getPersistentDataContainer().has(ACTIVE_GOAL_KEY, PersistentDataType.STRING)) {
+                cat.getPersistentDataContainer().remove(ACTIVE_GOAL_KEY);
+            }
+
             applyDecay(cat);
 
             Bukkit.getMobGoals().addGoal(cat, 2, new CatSitOnRedCarpetGoal(this, cat));
@@ -233,11 +241,13 @@ public class Main extends JavaPlugin implements Listener {
             }
         }
 
-        // Purr / meow sounds (same as before)
+        long currentTick = cat.getWorld().getFullTime();
         if (purrTimes.containsKey(rightClicked.getUniqueId())) return;
+        if (lastPurrStart.containsKey(cat.getUniqueId()) && currentTick - lastPurrStart.get(cat.getUniqueId()) < PURR_COOLDOWN_TICKS) return;
 
         double rand = Math.random();
         if (rand < 0.3) {
+            lastPurrStart.put(cat.getUniqueId(), currentTick);
             purrTimes.put(cat.getUniqueId(), 10);
             new BukkitRunnable() {
                 @Override
