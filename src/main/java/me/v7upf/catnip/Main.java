@@ -116,6 +116,7 @@ public class Main extends JavaPlugin implements Listener {
         Bukkit.getMobGoals().addGoal(cat, 5, new CatPlayWithItemGoal(this, cat, Material.SALMON));
         Bukkit.getMobGoals().addGoal(cat, 6, new CatPlayWithStringGoal(this, cat));
         Bukkit.getMobGoals().addGoal(cat, 7, new CatZoomiesGoal(this, cat));
+        Bukkit.getMobGoals().addGoal(cat, 4, new CatSocialGoal(this, cat));
     }
 
     @EventHandler
