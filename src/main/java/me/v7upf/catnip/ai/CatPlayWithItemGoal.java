@@ -35,6 +35,9 @@ public class CatPlayWithItemGoal implements Goal<Cat> {
 
     @Override
     public boolean shouldActivate() {
+        if (cat.getNoDamageTicks() > 0 || cat.getFireTicks() > 0 || !cat.isOnGround() || cat.isInWater()) {
+            return false;
+        }
         if (cat.isSitting()) return false;
         if (ThreadLocalRandom.current().nextDouble() >= 0.15) return false;
         if (!findItem()) return false;
@@ -66,6 +69,10 @@ public class CatPlayWithItemGoal implements Goal<Cat> {
 
     @Override
     public void tick() {
+        if (Math.random() < 0.01) {
+            stop();
+            return;
+        }
         if (!findItem() || !targetItem.isValid()) {
             stop();
             return;
@@ -76,13 +83,13 @@ public class CatPlayWithItemGoal implements Goal<Cat> {
                 targetItem.remove();
                 cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_EAT, 1, 1);
                 if (cat.getOwner() != null) {
-                    plugin.updateBond(cat.getUniqueId(), 2);
+                    plugin.updateBond(cat, 2);
                 }
             } else {
                 targetItem.setVelocity(new Vector(randomDouble(-0.25, 0.25), randomDouble(-0.25, 0.25), randomDouble(-0.25, 0.25)));
                 ticksPlayed++;
                 if (ticksPlayed % 20 == 0 && cat.getOwner() != null) {
-                    plugin.updateBond(cat.getUniqueId(), 1);
+                    plugin.updateBond(cat, 1);
                 }
             }
         }

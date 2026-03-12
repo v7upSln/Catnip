@@ -23,9 +23,11 @@ public class CatPlayFightOwnerGoal implements Goal<Cat> {
     private Player owner;
     private int cooldown = 0;
     private int nextActivationTick = 0;
+    private int telegraphTicks = 0;
+    private static final int TELEGRAPH_DURATION = 20;
     private static final int COOLDOWN_FIGHT = 20 * 60 * 10;
     private static final double ACTIVATION_CHANCE = 0.09;
-    private static final int MAX_BOND = 35; // Maximum bond to allow play fighting
+    private static final int MAX_BOND = 35;
 
     public CatPlayFightOwnerGoal(Main plugin, Cat cat) {
         this.key = GoalKey.of(Cat.class, new NamespacedKey(plugin, "play_fight_owner"));
@@ -35,6 +37,10 @@ public class CatPlayFightOwnerGoal implements Goal<Cat> {
 
     @Override
     public boolean shouldActivate() {
+        if (cat.isSitting()) return false;
+        if (cat.getNoDamageTicks() > 0 || cat.getFireTicks() > 0 || !cat.isOnGround() || cat.isInWater()) {
+            return false;
+        }
         if (cat.isSitting() || !cat.isTamed() || !(cat.getOwner() instanceof Player)) return false;
 
         Player checkOwner = (Player) cat.getOwner();
@@ -43,7 +49,7 @@ public class CatPlayFightOwnerGoal implements Goal<Cat> {
 
         if (nextActivationTick > 0 && cat.getTicksLived() < nextActivationTick) return false;
 
-        int bond = plugin.getBondLevels().getOrDefault(cat.getUniqueId(), 0);
+        int bond = plugin.getBond(cat);
         if (bond > MAX_BOND) return false;
 
         if (Math.random() >= ACTIVATION_CHANCE) return false;
@@ -56,7 +62,7 @@ public class CatPlayFightOwnerGoal implements Goal<Cat> {
     public boolean shouldStayActive() {
         if (cat.isSitting() || !cat.isTamed() || !(cat.getOwner() instanceof Player)) return false;
         Player checkOwner = (Player) cat.getOwner();
-        return cat.getWorld().equals(checkOwner.getWorld()) && cat.getLocation().distanceSquared(checkOwner.getLocation()) <= 49;
+        return cat.getWorld().equals(checkOwner.getWorld()) && cat.getLocation().distanceSquared(checkOwner.getLocation()) <= 81;
     }
 
     @Override
@@ -82,13 +88,27 @@ public class CatPlayFightOwnerGoal implements Goal<Cat> {
 
         cat.getPathfinder().moveTo(owner.getLocation(), 1.15);
 
-        if (cat.getLocation().distanceSquared(owner.getLocation()) < 4 && cooldown <= 0) {
-            owner.damage(1.0, cat);
-            cat.setVelocity(new Vector(0, 0.5, 0));
-            cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_HISS, 0.45f, 1f);
-            cat.getWorld().spawnParticle(Particle.CRIT, owner.getLocation().add(0, 1, 0), 8, 0.3, 0.3, 0.3, 0);
-            cooldown = 200;
-        } else if (cooldown > 0) {
+        if (cat.getLocation().distanceSquared(owner.getLocation()) < 4) {
+            if (telegraphTicks == 0) {
+                cat.getPathfinder().stopPathfinding();
+                cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_HISS, 0.3f, 0.8f);
+                telegraphTicks = TELEGRAPH_DURATION;
+            } else if (telegraphTicks > 0) {
+                telegraphTicks--;
+                cat.lookAt(owner.getLocation());
+                if (telegraphTicks == 0 && cooldown <= 0) {
+                    owner.damage(1.0, cat);
+                    cat.setVelocity(new Vector(0, 0.5, 0));
+                    cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_HISS, 0.45f, 1f);
+                    cat.getWorld().spawnParticle(Particle.CRIT, owner.getLocation().add(0, 1, 0), 8, 0.3, 0.3, 0.3, 0);
+                    cooldown = 200;
+                }
+            }
+        } else {
+            telegraphTicks = 0;
+        }
+
+        if (cooldown > 0) {
             cooldown--;
         }
     }

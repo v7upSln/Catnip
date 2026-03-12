@@ -34,6 +34,9 @@ public class CatPlayWithStringGoal implements Goal<Cat> {
 
     @Override
     public boolean shouldActivate() {
+        if (cat.getNoDamageTicks() > 0 || cat.getFireTicks() > 0 || !cat.isOnGround() || cat.isInWater()) {
+            return false;
+        }
         if (cat.isSitting()) return false;
         if (ThreadLocalRandom.current().nextDouble() >= 0.15) return false;
         if (!findString()) return false;
@@ -66,6 +69,10 @@ public class CatPlayWithStringGoal implements Goal<Cat> {
 
     @Override
     public void tick() {
+        if (Math.random() < 0.01) {
+            stop();
+            return;
+        }
         if (!findString()) return;
         cat.getPathfinder().moveTo(targetString.getLocation(), 1.2);
         if (targetString.getLocation().distanceSquared(cat.getLocation()) < 1) {
@@ -79,7 +86,7 @@ public class CatPlayWithStringGoal implements Goal<Cat> {
                 jumpCooldown--;
             }
             if (ticksPlayed % 20 == 0 && cat.getOwner() != null) {
-                plugin.updateBond(cat.getUniqueId(), 1);
+                plugin.updateBond(cat, 1);
             }
         }
     }

@@ -16,7 +16,7 @@ public class UpdateChecker {
     public static void check(JavaPlugin plugin, String repo) {
         updateAvailable = false;
         latestVersion = "";
-        String current = plugin.getDescription().getVersion();
+        String current = plugin.getPluginMeta().getVersion();
         try {
             String latest = fetchLatestRelease(repo);
             if (latest == null) {

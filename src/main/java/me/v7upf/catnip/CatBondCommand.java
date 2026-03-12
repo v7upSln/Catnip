@@ -56,7 +56,7 @@ public class CatBondCommand implements CommandExecutor {
             for (Cat cat : w.getEntitiesByClass(Cat.class)) {
                 if (cat.isTamed() && target.getUniqueId().equals(cat.getOwnerUniqueId())) {
                     found = true;
-                    int bond = plugin.getBondLevels().getOrDefault(cat.getUniqueId(), 0);
+                    int bond = plugin.getBond(cat);
                     String collar = cat.getCollarColor() != null ? cat.getCollarColor().toString() : "Unknown";
                     String name = cat.getName() != null ? cat.getName() : "Unnamed";
                     String shortId = cat.getUniqueId().toString().substring(0, 8);

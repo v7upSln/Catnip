@@ -10,6 +10,7 @@ import org.bukkit.NamespacedKey;
 import org.bukkit.Sound;
 import org.bukkit.block.Block;
 import org.bukkit.entity.Cat;
+import org.bukkit.entity.Player;
 import org.bukkit.persistence.PersistentDataType;
 import org.jetbrains.annotations.NotNull;
 
@@ -23,22 +24,26 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
     private Location targetCarpet;
     private int searchCooldown = 0;
     private int purrTick = 0;
-    private int nextPurrDelay = 0; // ticks until next purr
-    private static final double ACTIVATION_CHANCE = 0.29;
+    private int nextPurrDelay = 0;
+    private static final double ACTIVATION_CHANCE = 0.15;
 
     public CatSitOnRedCarpetGoal(Main plugin, Cat cat) {
         this.key = GoalKey.of(Cat.class, new NamespacedKey(plugin, "sit_on_red_carpet"));
         this.cat = cat;
     }
 
+    private boolean isSafeAndCalm() {
+        return cat.getNoDamageTicks() == 0 && cat.getFireTicks() <= 0 && !cat.isInWater() && cat.isOnGround();
+    }
+
     @Override
     public boolean shouldActivate() {
+        if (cat.isSitting()) return false;
+        if (!isSafeAndCalm()) return false;
         if (cat.isLyingDown() && targetCarpet == null) return false;
 
-        if (cat.getOwner() instanceof org.bukkit.entity.Player) {
-            org.bukkit.entity.Player owner = (org.bukkit.entity.Player) cat.getOwner();
-            if (!cat.getWorld().equals(owner.getWorld()) ||
-                cat.getLocation().distanceSquared(owner.getLocation()) > 100) {
+        if (cat.getOwner() instanceof Player owner) {
+            if (!cat.getWorld().equals(owner.getWorld()) || cat.getLocation().distanceSquared(owner.getLocation()) > 25) {
                 return false;
             }
         }
@@ -49,31 +54,27 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
         }
 
         if (Math.random() > ACTIVATION_CHANCE) {
-            searchCooldown = 100;
+            searchCooldown = ThreadLocalRandom.current().nextInt(300, 600);
             return false;
         }
 
         targetCarpet = findRedCarpet();
         if (targetCarpet == null) {
-            searchCooldown = 120;
+            searchCooldown = 200;
             return false;
         }
 
-        String active = cat.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING);
-        return active == null;
+        return !cat.getPersistentDataContainer().has(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING);
     }
 
     @Override
     public boolean shouldStayActive() {
-        if (targetCarpet == null) return false;
+        if (targetCarpet == null || !isSafeAndCalm() || cat.isLeashed()) return false;
         if (targetCarpet.getBlock().getType() != Material.RED_CARPET) return false;
-        if (cat.isLeashed()) return false;
 
-        if (cat.getOwner() instanceof org.bukkit.entity.Player) {
-            org.bukkit.entity.Player owner = (org.bukkit.entity.Player) cat.getOwner();
-            if (!cat.getWorld().equals(owner.getWorld()) ||
-                cat.getLocation().distanceSquared(owner.getLocation()) > 100) {
-                return false;
+        if (cat.getOwner() instanceof Player owner) {
+            if (!cat.getWorld().equals(owner.getWorld()) || cat.getLocation().distanceSquared(owner.getLocation()) > 81) {
+                return false; 
             }
         }
         return true;
@@ -91,6 +92,7 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
     public void stop() {
         targetCarpet = null;
         cat.setLyingDown(false);
+        searchCooldown = 400; 
         if (GOAL_ID.equals(cat.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING))) {
             cat.getPersistentDataContainer().remove(Main.ACTIVE_GOAL_KEY);
         }
@@ -100,43 +102,41 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
     public void tick() {
         if (targetCarpet == null) return;
 
-        Location catLoc = cat.getLocation();
-        if (Math.abs(catLoc.getX() - (targetCarpet.getX() + 0.5)) < 0.5 &&
-            Math.abs(catLoc.getZ() - (targetCarpet.getZ() + 0.5)) < 0.5) {
+        Location dest = targetCarpet.clone().add(0.5, 0, 0.5);
+        if (cat.getLocation().distanceSquared(dest) < 0.4) {
+            if (!cat.isLyingDown()) cat.setLyingDown(true);
 
-            if (!cat.isLyingDown()) {
-                cat.setLyingDown(true);
+            Player owner = (Player) cat.getOwner();
+            if (owner != null && owner.getWorld().equals(cat.getWorld()) &&
+                    owner.getLocation().distanceSquared(cat.getLocation()) < 16 &&
+                    owner.getVelocity().lengthSquared() < 0.01) {
+                if (purrTick++ % 40 == 0) {
+                    cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_PURR, 0.2f, 1.2f);
+                }
+            } else {
+                purrTick++;
+                if (purrTick >= nextPurrDelay) {
+                    float pitch = 0.9f + (float) Math.random() * 0.2f;
+                    cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_PURR, 0.1f, pitch);
+                    purrTick = 0;
+                    nextPurrDelay = randomPurrDelay();
+                }
             }
-
-            // Purr at random intervals (approx every 15-25 ticks) with low volume and slight pitch variation
-            purrTick++;
-            if (purrTick >= nextPurrDelay) {
-                float pitch = 0.9f + (float) Math.random() * 0.2f; // 0.9 to 1.1
-                cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_PURR, 0.1f, pitch);
-                purrTick = 0;
-                nextPurrDelay = randomPurrDelay();
-            }
-
         } else {
             if (cat.isLyingDown()) cat.setLyingDown(false);
-            cat.getPathfinder().moveTo(targetCarpet.clone().add(0.5, 0, 0.5), 1.0);
+            cat.getPathfinder().moveTo(dest, 1.0);
         }
     }
 
-    private int randomPurrDelay() {
-        return ThreadLocalRandom.current().nextInt(15, 26); // 15-25 ticks
-    }
+    private int randomPurrDelay() { return ThreadLocalRandom.current().nextInt(15, 26); }
 
     private Location findRedCarpet() {
         Location center = cat.getLocation();
-        int radius = 8;
-        for (int x = -radius; x <= radius; x++) {
+        for (int x = -8; x <= 8; x++) {
             for (int y = -1; y <= 1; y++) {
-                for (int z = -radius; z <= radius; z++) {
+                for (int z = -8; z <= 8; z++) {
                     Block b = center.clone().add(x, y, z).getBlock();
-                    if (b.getType() == Material.RED_CARPET) {
-                        return b.getLocation();
-                    }
+                    if (b.getType() == Material.RED_CARPET) return b.getLocation();
                 }
             }
         }
@@ -144,12 +144,8 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
     }
 
     @Override
-    public @NotNull GoalKey<Cat> getKey() {
-        return key;
-    }
+    public @NotNull GoalKey<Cat> getKey() { return key; }
 
     @Override
-    public @NotNull EnumSet<GoalType> getTypes() {
-        return EnumSet.of(GoalType.MOVE, GoalType.JUMP);
-    }
+    public @NotNull EnumSet<GoalType> getTypes() { return EnumSet.of(GoalType.MOVE, GoalType.JUMP); }
 }

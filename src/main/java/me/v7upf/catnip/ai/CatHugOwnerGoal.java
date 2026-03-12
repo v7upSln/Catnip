@@ -22,6 +22,8 @@ public class CatHugOwnerGoal implements Goal<Cat> {
     private Player owner;
     private int cooldown = 0;
     private int nextActivationTick = 0;
+    private int telegraphTicks = 0;
+    private static final int TELEGRAPH_DURATION = 15;
     private static final int COOLDOWN_HUG = 20 * 60 * 5;
     private static final double ACTIVATION_CHANCE = 0.28;
     private static final int REQUIRED_BOND = 85;
@@ -35,13 +37,17 @@ public class CatHugOwnerGoal implements Goal<Cat> {
     @Override
     public boolean shouldActivate() {
         if (cat.isSitting()) return false;
+        if (cat.getNoDamageTicks() > 0 || cat.getFireTicks() > 0 || !cat.isOnGround() || cat.isInWater()) {
+            return false;
+        }
+        if (cat.isSitting()) return false;
         if (!cat.isTamed()) return false;
         if (!(cat.getOwner() instanceof Player)) return false;
         Player owner = (Player) cat.getOwner();
         if (!cat.getWorld().equals(owner.getWorld()) || cat.getLocation().distanceSquared(owner.getLocation()) > 25)
             return false;
         if (cat.getTicksLived() < nextActivationTick) return false;
-        int bond = plugin.getBondLevels().getOrDefault(cat.getUniqueId(), 0);
+        int bond = plugin.getBond(cat);
         if (bond < REQUIRED_BOND) return false;
         if (Math.random() >= ACTIVATION_CHANCE) return false;
 
@@ -55,7 +61,7 @@ public class CatHugOwnerGoal implements Goal<Cat> {
         if (!cat.isTamed()) return false;
         if (!(cat.getOwner() instanceof Player)) return false;
         Player owner = (Player) cat.getOwner();
-        return cat.getWorld().equals(owner.getWorld()) && cat.getLocation().distanceSquared(owner.getLocation()) <= 49;
+        return cat.getWorld().equals(owner.getWorld()) && cat.getLocation().distanceSquared(owner.getLocation()) <= 81;
     }
 
     @Override
@@ -78,11 +84,25 @@ public class CatHugOwnerGoal implements Goal<Cat> {
     @Override
     public void tick() {
         if (owner == null) return;
+
+        if (telegraphTicks == 0 && cat.getLocation().distanceSquared(owner.getLocation()) > 4) {
+            cat.getPathfinder().stopPathfinding();
+            cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_PURREOW, 0.5f, 1.2f);
+            telegraphTicks = TELEGRAPH_DURATION;
+        } else if (telegraphTicks > 0) {
+            telegraphTicks--;
+            cat.lookAt(owner.getLocation());
+            if (telegraphTicks == 0) {
+                cat.getPathfinder().moveTo(owner.getLocation(), 1.1);
+            }
+            return;
+        }
+
         cat.getPathfinder().moveTo(owner.getLocation(), 1.1);
         if (cat.getLocation().distanceSquared(owner.getLocation()) < 4 && cooldown <= 0) {
             cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_PURR, 0.4f, 1.5f);
             cat.getWorld().spawnParticle(Particle.HEART, cat.getLocation().add(0, 1, 0), 7, 0.5, 0.5, 0.5, 0);
-            plugin.updateBond(cat.getUniqueId(), 1);
+            plugin.updateBond(cat, 1);
             cooldown = 60 + (int) (Math.random() * 40);
         } else if (cooldown > 0) {
             cooldown--;

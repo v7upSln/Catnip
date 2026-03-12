@@ -1,0 +1,13 @@
+- This adds the lit furnace check (using Lightable), implements a 3-state machine (walk -> spin -> sit), and applies the hysteresis logic to prevent glitching.
+
+- This makes the cat feel more organic. If the cat decides it doesn't want to sit on the carpet, it applies a long cooldown so it isn't constantly re-evaluating and glitching its pathfinding.
+
+- apply the same Fleeing Priority and Hysteresis fixes to CatPlayFightOwnerGoal, CatHugOwnerGoal, and the Item goals, make sure to add this check at the very beginning of their shouldActivate() methods
+
+-In Main.java, you are calling UpdateChecker.check(this, "v7upSln/Catnip"); inside onEnable(). This runs on the main server thread. Since your UpdateChecker makes an HTTP request to GitHub, the entire server will freeze and stop loading for up to 10 seconds if GitHub's API is slow or unreachable. Wrapped the update checker in an async task in Main.java's onEnable():
+
+- In Main.java, you store cat UUIDs in purrTimes and lastPurrStart HashMaps. However, you never remove the UUIDs when a cat dies or gets deleted. If a server runs for a long time, these maps will endlessly grow with the UUIDs of dead cats, causing a memory leak.
+
+- In your onRightClick event (PlayerInteractEntityEvent), when a player feeds a fish to their cat, you manually subtract 1 from the item amount and cancel the event (e.setCancelled(true)). The Fix: Check the player's game mode, and don't blindly cancel the event.
+
+- You inject your custom AI goals inside EntityAddToWorldEvent. This is generally fine, but if you use /reload or a plugin manager to reload Catnip while the server is running, any cats that are already loaded in the world will not get the new AI goals until their chunk is unloaded and reloaded.
