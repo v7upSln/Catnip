@@ -17,12 +17,13 @@ import java.util.concurrent.ThreadLocalRandom;
 
 public class CatSocialGoal implements Goal<Cat> {
     private static final String GOAL_ID = "social_interaction";
+    private static final long COOLDOWN_TICKS = 20 * 60 * 5; // 5 minutes cooldown
     private final GoalKey<Cat> key;
     private final Main plugin;
     private final Cat cat;
     private Cat friend;
     
-    private int state = 0; // 0: Walking to friend, 1: Interacting 
+    private int state = 0; 
     private int interactionTicks = 0; 
     private InteractionType type;
 
@@ -36,10 +37,13 @@ public class CatSocialGoal implements Goal<Cat> {
 
     @Override
     public boolean shouldActivate() {
+        // Cooldown check
+        if (cat.getTicksLived() < cat.getPersistentDataContainer().getOrDefault(
+                new NamespacedKey(plugin, "next_social"), PersistentDataType.LONG, 0L)) return false;
+
         if (cat.isSitting() || cat.getNoDamageTicks() > 0) return false;
         if (cat.getPersistentDataContainer().has(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING)) return false;
         
-        // Only try to socialize occasionally 
         if (ThreadLocalRandom.current().nextDouble() > 0.05) return false;
 
         friend = findNearbyFriend();
@@ -58,56 +62,65 @@ public class CatSocialGoal implements Goal<Cat> {
         type = InteractionType.values()[ThreadLocalRandom.current().nextInt(InteractionType.values().length)];
         
         cat.getPersistentDataContainer().set(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING, GOAL_ID);
-        // Lock the friend into the social state too if they aren't busy 
-        if (!friend.getPersistentDataContainer().has(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING)) {
-            friend.getPersistentDataContainer().set(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING, "social_target");
-            friend.getPathfinder().stopPathfinding();
-            friend.lookAt(cat);
-        }
+        
+        // Signal the friend to join the interaction
+        friend.getPersistentDataContainer().set(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING, "social_target");
+        friend.getPathfinder().stopPathfinding();
+        friend.lookAt(cat);
     }
 
     @Override
     public void stop() {
-        cat.getPersistentDataContainer().remove(Main.ACTIVE_GOAL_KEY);
-        if (friend != null && "social_target".equals(friend.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING))) {
+        // Set cooldown on both cats
+        long nextTime = cat.getTicksLived() + COOLDOWN_TICKS;
+        cat.getPersistentDataContainer().set(new NamespacedKey(plugin, "next_social"), PersistentDataType.LONG, nextTime);
+        if (friend != null) {
+            friend.getPersistentDataContainer().set(new NamespacedKey(plugin, "next_social"), PersistentDataType.LONG, nextTime);
             friend.getPersistentDataContainer().remove(Main.ACTIVE_GOAL_KEY);
         }
+        
+        cat.getPersistentDataContainer().remove(Main.ACTIVE_GOAL_KEY);
         friend = null;
     }
 
     @Override
     public void tick() {
         interactionTicks--;
-        double distSq = cat.getLocation().distanceSquared(friend.getLocation());
-
+        
         if (state == 0) {
             cat.getPathfinder().moveTo(friend.getLocation(), 1.0);
-            if (distSq < 2.0) {
+            if (cat.getLocation().distanceSquared(friend.getLocation()) < 2.0) {
                 state = 1;
                 cat.getPathfinder().stopPathfinding();
             }
         } else {
             cat.lookAt(friend.getLocation());
+            // Both cats now participate in the "performance"
             performBehavior();
+            friend.lookAt(cat); // Ensure mutual eye contact
         }
     }
 
     private void performBehavior() {
+        // Both cats play the sounds/particles to make it feel mutual
         switch (type) {
             case GROOM -> {
                 if (interactionTicks % 20 == 0) {
                     cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_PURR, 0.2f, 1.5f);
-                    cat.getWorld().spawnParticle(Particle.HEART, cat.getLocation().add(0, 0.5, 0), 1, 0.2, 0.2, 0.2, 0);
+                    cat.getWorld().spawnParticle(Particle.HEART, cat.getLocation().add(0, 0.5, 0), 1, 0.1, 0.1, 0.1, 0);
+                    friend.getWorld().spawnParticle(Particle.HEART, friend.getLocation().add(0, 0.5, 0), 1, 0.1, 0.1, 0.1, 0);
                 }
             }
             case SNIFF -> {
                 if (interactionTicks % 15 == 0) {
                     cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_AMBIENT, 0.1f, 1.8f);
+                    friend.getWorld().playSound(friend.getLocation(), Sound.ENTITY_CAT_AMBIENT, 0.1f, 1.8f);
                 }
             }
             case TAG -> {
-                // In tag, they just run around each other 
-                cat.getPathfinder().moveTo(friend.getLocation().add(ThreadLocalRandom.current().nextInt(3)-1, 0, ThreadLocalRandom.current().nextInt(3)-1), 1.4);
+                // Both cats move slightly to mimic tag behavior
+                cat.getPathfinder().moveTo(friend.getLocation().add(ThreadLocalRandom.current().nextInt(3)-1, 0, ThreadLocalRandom.current().nextInt(3)-1), 1.2);
+                friend.getPathfinder().moveTo(cat.getLocation().add(ThreadLocalRandom.current().nextInt(3)-1, 0, ThreadLocalRandom.current().nextInt(3)-1), 1.2);
             }
         }
     }
@@ -116,8 +129,9 @@ public class CatSocialGoal implements Goal<Cat> {
         Collection<Cat> cats = cat.getWorld().getNearbyEntitiesByType(Cat.class, cat.getLocation(), 8);
         for (Cat c : cats) {
             if (c.equals(cat)) continue;
-            if (c.isTamed() && c.getOwnerUniqueId() != null && c.getOwnerUniqueId().equals(cat.getOwnerUniqueId())) {
-                // Only socializing with cats from the same owner for now 
+            // Only interact if the friend isn't already busy
+            if (c.isTamed() && c.getOwnerUniqueId() != null && c.getOwnerUniqueId().equals(cat.getOwnerUniqueId()) 
+                && !c.getPersistentDataContainer().has(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING)) {
                 return c;
             }
         }
