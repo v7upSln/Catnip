@@ -35,7 +35,7 @@ public class CatZoomiesGoal implements Goal<Cat> {
 
     @Override
     public boolean shouldStayActive() {
-        return duration > 0;
+        return duration > 0 && !cat.isSitting() && cat.isOnGround() && !cat.isInWater();
     }
 
     @Override
@@ -54,6 +54,10 @@ public class CatZoomiesGoal implements Goal<Cat> {
 
     @Override
     public void tick() {
+        if (cat.isSitting()) {
+            duration = 0;
+            return;
+        }
         duration--;
         if (duration <= 0) return;
         if (cat.getLocation().distanceSquared(target) < 4) {

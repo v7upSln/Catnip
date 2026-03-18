@@ -37,7 +37,7 @@ public class CatSitOnFurnaceGoal implements Goal<Cat> {
 
     @Override
     public boolean shouldActivate() {
-        if (cat.isSitting() && targetFurnace == null) return false;
+        if (cat.isSitting()) return false;
         if (!isSafeAndCalm()) return false;
 
         if (cat.getOwner() instanceof Player owner) {
@@ -62,6 +62,7 @@ public class CatSitOnFurnaceGoal implements Goal<Cat> {
 
     @Override
     public boolean shouldStayActive() {
+        if (cat.isSitting()) return false;
         if (targetFurnace == null || !isSafeAndCalm()) return false;
         
         Block block = targetFurnace.getBlock();
@@ -88,7 +89,6 @@ public class CatSitOnFurnaceGoal implements Goal<Cat> {
     @Override
     public void stop() {
         targetFurnace = null;
-        cat.setSitting(false);
         state = 0;
         if (GOAL_ID.equals(cat.getPersistentDataContainer().get(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING))) {
             cat.getPersistentDataContainer().remove(Main.ACTIVE_GOAL_KEY);

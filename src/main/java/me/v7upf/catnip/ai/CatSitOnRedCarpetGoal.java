@@ -69,6 +69,7 @@ public class CatSitOnRedCarpetGoal implements Goal<Cat> {
 
     @Override
     public boolean shouldStayActive() {
+        if (cat.isSitting()) return false;
         if (targetCarpet == null || !isSafeAndCalm() || cat.isLeashed()) return false;
         if (targetCarpet.getBlock().getType() != Material.RED_CARPET) return false;
 

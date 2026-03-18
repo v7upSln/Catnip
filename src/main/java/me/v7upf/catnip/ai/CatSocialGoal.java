@@ -18,6 +18,7 @@ import java.util.concurrent.ThreadLocalRandom;
 public class CatSocialGoal implements Goal<Cat> {
     private static final String GOAL_ID = "social_interaction";
     private static final long COOLDOWN_TICKS = 20 * 60 * 5; // 5 minutes cooldown
+    private static final double MEET_DISTANCE_SQUARED = 2.0;
     private final GoalKey<Cat> key;
     private final Main plugin;
     private final Cat cat;
@@ -47,12 +48,16 @@ public class CatSocialGoal implements Goal<Cat> {
         if (ThreadLocalRandom.current().nextDouble() > 0.05) return false;
 
         friend = findNearbyFriend();
-        return friend != null;
+        return friend != null && !friend.isSitting();
     }
 
     @Override
     public boolean shouldStayActive() {
-        return friend != null && friend.isValid() && interactionTicks > 0 && !cat.isSitting();
+        return friend != null
+                && friend.isValid()
+                && interactionTicks > 0
+                && !cat.isSitting()
+                && !friend.isSitting();
     }
 
     @Override
@@ -77,6 +82,7 @@ public class CatSocialGoal implements Goal<Cat> {
         if (friend != null) {
             friend.getPersistentDataContainer().set(new NamespacedKey(plugin, "next_social"), PersistentDataType.LONG, nextTime);
             friend.getPersistentDataContainer().remove(Main.ACTIVE_GOAL_KEY);
+            friend.getPathfinder().stopPathfinding();
         }
         
         cat.getPersistentDataContainer().remove(Main.ACTIVE_GOAL_KEY);
@@ -89,9 +95,13 @@ public class CatSocialGoal implements Goal<Cat> {
         
         if (state == 0) {
             cat.getPathfinder().moveTo(friend.getLocation(), 1.0);
-            if (cat.getLocation().distanceSquared(friend.getLocation()) < 2.0) {
+            // Make the "friend" actively approach too so it doesn't look frozen.
+            friend.getPathfinder().moveTo(cat.getLocation(), 1.0);
+
+            if (cat.getLocation().distanceSquared(friend.getLocation()) < MEET_DISTANCE_SQUARED) {
                 state = 1;
                 cat.getPathfinder().stopPathfinding();
+                friend.getPathfinder().stopPathfinding();
             }
         } else {
             cat.lookAt(friend.getLocation());
@@ -109,12 +119,33 @@ public class CatSocialGoal implements Goal<Cat> {
                     cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_PURR, 0.2f, 1.5f);
                     cat.getWorld().spawnParticle(Particle.HEART, cat.getLocation().add(0, 0.5, 0), 1, 0.1, 0.1, 0.1, 0);
                     friend.getWorld().spawnParticle(Particle.HEART, friend.getLocation().add(0, 0.5, 0), 1, 0.1, 0.1, 0.1, 0);
+                    friend.getWorld().playSound(friend.getLocation(), Sound.ENTITY_CAT_PURR, 0.2f, 1.5f);
+                }
+                // Subtle circling to avoid "statue" behavior while grooming.
+                if (interactionTicks % 10 == 0) {
+                    friend.getPathfinder().moveTo(cat.getLocation().add(
+                            ThreadLocalRandom.current().nextDouble(-1.0, 1.0),
+                            0,
+                            ThreadLocalRandom.current().nextDouble(-1.0, 1.0)
+                    ), 1.0);
                 }
             }
             case SNIFF -> {
                 if (interactionTicks % 15 == 0) {
                     cat.getWorld().playSound(cat.getLocation(), Sound.ENTITY_CAT_AMBIENT, 0.1f, 1.8f);
                     friend.getWorld().playSound(friend.getLocation(), Sound.ENTITY_CAT_AMBIENT, 0.1f, 1.8f);
+                }
+                if (interactionTicks % 12 == 0) {
+                    cat.getPathfinder().moveTo(friend.getLocation().add(
+                            ThreadLocalRandom.current().nextDouble(-0.75, 0.75),
+                            0,
+                            ThreadLocalRandom.current().nextDouble(-0.75, 0.75)
+                    ), 1.05);
+                    friend.getPathfinder().moveTo(cat.getLocation().add(
+                            ThreadLocalRandom.current().nextDouble(-0.75, 0.75),
+                            0,
+                            ThreadLocalRandom.current().nextDouble(-0.75, 0.75)
+                    ), 1.05);
                 }
             }
             case TAG -> {
@@ -131,6 +162,7 @@ public class CatSocialGoal implements Goal<Cat> {
             if (c.equals(cat)) continue;
             // Only interact if the friend isn't already busy
             if (c.isTamed() && c.getOwnerUniqueId() != null && c.getOwnerUniqueId().equals(cat.getOwnerUniqueId()) 
+                && !c.isSitting()
                 && !c.getPersistentDataContainer().has(Main.ACTIVE_GOAL_KEY, PersistentDataType.STRING)) {
                 return c;
             }

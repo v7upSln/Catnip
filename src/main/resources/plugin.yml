@@ -1,6 +1,6 @@
 name: Catnip
 main: me.v7upf.catnip.Main
-version: 1.3
+version: 1.4
 api-version: '1.21'
 commands:
   catbond:
